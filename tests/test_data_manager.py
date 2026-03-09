@@ -131,12 +131,18 @@ class TestPivotTensorToDataFrame(BaseCaseTest):
     def test_pivot_tensor_to_dataframe(self):
         data = load_data(self.sldata_path)
         slp_tensor, timestamps, transects = build_slpt_tensor(data)
-        df = pivot_tensor_to_dataframe(slp_tensor, timestamps, transects)
+        df = melt_tensor(slp_tensor, timestamps, transects)
         self.assertIsInstance(df, pd.DataFrame)
         self.assertFalse(df.empty)
         print(df.head())
         df.info()
         # print("TestPivotTensorToDataFrame: Tensor pivoted to DataFrame successfully.")
+        
+        
+class TestBuildMLData(BaseCaseTest):
+    def test_build_mldata(self):
+        data = load_data(self.sldata_path)
+        build_mldata(data)
 
 if __name__ == '__main__':
     unittest.main()

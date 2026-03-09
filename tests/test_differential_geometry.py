@@ -9,7 +9,7 @@ class BaseCaseTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Common setup for all tests
-        cls.sldata_path = r"data\jennette_south_roi_model_118cf4cf71a10dce.csv"
+        cls.sldata_path = rf"data\jennette_south_roi_model_118cf4cf71a10dce.csv"
         cls.sldata = load_data(cls.sldata_path)
         
 
@@ -24,6 +24,7 @@ class TestComputeDifferentials(BaseCaseTest):
         Q, _, _ = build_slpt_tensor(self.sldata)
         dt, dQ, delQ = compute_differentials(Q)
         print("TestComputeDifferentials: Differentials computed correctly.")
+        print(dQ)
     
 if __name__ == '__main__':
     unittest.main()

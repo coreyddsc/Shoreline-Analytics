@@ -1,9 +1,11 @@
 import numpy as np
 import pandas as pd
+
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
-
+from sklearn.metrics import roc_curve, auc, confusion_matrix, RocCurveDisplay
+from sklearn.metrics import classification_report
 try:
     from data_manager import load_data, load_3d_arrays, build_slpt_tensor, build_astro_features, build_time_features
     from differential_geometry import *
@@ -20,9 +22,11 @@ except ImportError:
 # if the dataset has not been processed into hdf5 stored tensor features, then we can build the tensor feature from the raw csv data by calling build_slpt_tensor,
 # then construct the desired tensor feature from the Q config space (examples are arc length, velocity, kinetic energy, etc.)
 
-def build_feature_space(s_melt: pd.DataFrame, nodes: list = [], feature_cols: list = [], one_hot_encode: bool = False):
+def build_feature_space(data: pd.DataFrame, nodes: list = [], feature_cols: list = [], one_hot_encode: bool = False):
     # drop rows with NaN arc length
-    S_melt = s_melt.dropna(subset=feature_cols)
+    
+    S_melt = data[["Node"]+feature_cols].dropna().copy()
+    print(f"Shoreline Feature Columns:\n{S_melt.columns}")
     
     # if no nodes specified, just return all nodes as integer labels
     if len(nodes) == 0 and one_hot_encode is False:
@@ -38,9 +42,11 @@ def build_feature_space(s_melt: pd.DataFrame, nodes: list = [], feature_cols: li
         nodes = S_melt[['Node']]
         encoded_nodes = encoder.fit_transform(nodes)
         y = encoded_nodes[:,0]
-        print(f"Encoded nodes shape: {encoded_nodes.shape}")
-        print(f"Encoded nodes sample:\n{encoded_nodes[:5,:]}")
+        # print(f"Encoded nodes shape: {encoded_nodes.shape}")
+        # print(f"Encoded nodes sample:\n{encoded_nodes[:5,:]}")
     elif len(nodes) >= 2 and one_hot_encode is False:
+        # print(f"Input Nodes List:\n{nodes}")
+        # print(f"Nodes found in subset data:\n{np.unique(S_melt['Node'].values)}")
         S_melt = S_melt[S_melt['Node'].isin(nodes)]
         y = S_melt['Node'].values
         encoder = None
@@ -69,8 +75,23 @@ def nodal_logistic_reg(X: np.ndarray, y: np.ndarray):
     test_score = model.score(X_test, y_test)
     print(f"Training set accuracy: {train_score}")
     print(f"Test set accuracy: {test_score}")
-    return model, scaler
+    return model, scaler, (X_test, y_test)
 
+
+def evaluate_model(model, X_test: np.ndarray, y_test: np.ndarray, make_plots: bool = True):
+    """Comprehensive model evaluation with ROC, AUC, and Confusion Matrix metrics."""
+    y_pred = model.predict(X_test)
+    y_pred_proba = model.predict_proba(X_test)
+    
+    print("\n"+"="*50)
+    print("CONFUSION MATRIX:")
+    print("="*50)
+    print(confusion_matrix(y_test,y_pred))
+    
+    print("\n"+"="*50)
+    print("CLASSIFICATION REPORT:")
+    print("="*50)
+    print(classification_report(y_test,y_pred))
 
 
 ##################################################

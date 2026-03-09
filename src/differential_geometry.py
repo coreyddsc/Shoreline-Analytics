@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
 # let Q be the configuration space for the system of observed particles
-def compute_differentials(data: np.ndarray, max_time_delta=2.0):
+def compute_differentials(data: np.ndarray, max_time_delta: float = 2.0):
     """
     Compute arc length differentials along spatial dimensions.
     data should be a 2 or 3d array with shape (states, nodes, dims)
@@ -40,7 +40,7 @@ def compute_differentials(data: np.ndarray, max_time_delta=2.0):
     
     return dt, dQ, delQ
 
-def compute_arc_lengths(dQ, delQ):
+def compute_arc_lengths(dQ: np.ndarray, delQ: np.ndarray):
     """Compute arc lengths from spatial differentials."""
     dS2 = np.sum(dQ**2, axis=2)  # squared spatial differences in time (temporal metric component g_tt of the full metric tensor g)
     dS = np.sqrt(dS2 + 1e-8)  # arc length of each particle's movement through space between time steps
@@ -51,7 +51,7 @@ def compute_arc_lengths(dQ, delQ):
     return dS, delS
 
 
-def compute_worldline_arc_length(dS):
+def compute_worldline_arc_length(dS: np.ndarray):
     """
     Compute cumulative path length traveled by each particle through space.
     
@@ -65,7 +65,7 @@ def compute_worldline_arc_length(dS):
     return tau
 
 
-def compute_fxy(delS):
+def compute_fxy(delS: np.ndarray):
     X = delS[:,:,0]
     Y = delS[:,:,1]
     fyx = Y / X # fyx = (y_j+1 - y_j) / (x_j+1 - x_j)
@@ -73,7 +73,7 @@ def compute_fxy(delS):
     return fyx
 
 
-def compute_arc_length_coordinate(delS):
+def compute_arc_length_coordinate(delS: np.ndarray):
     """
     Compute arc length coordinate along shoreline.
     
@@ -89,32 +89,32 @@ def compute_arc_length_coordinate(delS):
     return s
 
 
-def compute_tangent_vectors(delQ, delS):
+def compute_tangent_vectors(delQ: np.ndarray, delS: np.ndarray):
     """Compute tangent vectors along shoreline from spatial variation delQ and arc lengths delS."""
     T = delQ / delS[:, :, np.newaxis]  # shape (states, nodes, dims-1) [tangent vectors along shoreline] Direction along the shoreline curve (spatial geometry) (shoreline tangent)
     return T 
 
 
-def compute_worldline_tangents(dQ, dS):
+def compute_worldline_tangents(dQ: np.ndarray, dS: np.ndarray):
     """Compute worldline tangent vectors from spatial differentials dQ and arc lengths dS."""
     dQdS = dQ / dS[:, :, np.newaxis]  # shape (states, nodes, dims-1) [directional vectors of motion] (worldline tangents)
     return dQdS
 
 
 
-def compute_velocity_vectors(dQ, dt, max_time_delta=2.0):
+def compute_velocity_vectors(dQ: np.ndarray, dt: np.ndarray, max_time_delta: float = 2.0):
     """Compute velocity vectors from spatial differentials dQ and time differentials dt."""
     Velocity = dQ / dt[:, :, np.newaxis]  # shape (states, nodes, dims-1) Direction of particle motion through space (temporal evolution)
     return Velocity
 
 
-def compute_speed(Velocity):
+def compute_speed(Velocity: np.ndarray):
     """Compute speed (magnitude of velocity vectors)."""
     speed = np.linalg.norm(Velocity, axis=2)  # shape (states, nodes)
     return speed
 
 
-def compute_normal_vectors(T):
+def compute_normal_vectors(T: np.ndarray):
     """Compute normal vectors to shoreline from tangent vectors T."""
     # assuming 2D space (dims-1 = 2)
     N = np.zeros_like(T)
@@ -123,7 +123,7 @@ def compute_normal_vectors(T):
     return N
 
 
-def compute_velocity_components(T, N, Velocity):
+def compute_velocity_components(T: np.ndarray, N: np.ndarray, Velocity: np.ndarray):
     """
     Compute tangential and normal velocity vectors.
     
@@ -157,7 +157,7 @@ def compute_velocity_components(T, N, Velocity):
 
 
 # shoreline_strain_rate, spatial_arc_rate
-def compute_arc_change_rates(delS, dt):
+def compute_arc_change_rates(delS: np.ndarray, dt: np.ndarray):
     """Compute rates of change of arc lengths over time."""
     # delS has shape (states, nodes)
     # dt has shape (states, nodes)  
@@ -166,11 +166,11 @@ def compute_arc_change_rates(delS, dt):
     # Pad to match original shape
     d_delS_dt = np.vstack([np.zeros((1, delS.shape[1])), d_delS_dt])
     # notationally, this is ∂(delS)/∂t, which is the same as del(∂S/∂t)
-    # but is this truly a variation given this are observed shoreline points, can we really play at it being a variation between nodes?
+    # but is this truly a variation given these are observed shoreline points, can we really play at it being a variation between nodes?
     return d_delS_dt  # This is the true shoreline_strain_rate
 
 
-def compute_shoreline_strain_acceleration(delS, dt):
+def compute_shoreline_strain_acceleration(delS: np.ndarray, dt: np.ndarray):
     """Compute acceleration of shoreline segment length changes."""
     # First derivative: how segment lengths change
     d_delS_dt = np.diff(delS, axis=0) / dt[:-1, :]  # shape: (states-1, nodes)
@@ -185,7 +185,7 @@ def compute_shoreline_strain_acceleration(delS, dt):
     return d_delS_dt, d2_delS_dt2
 
 
-def compute_velocity_gradient_tensor(Velocity, delS, dt):
+def compute_velocity_gradient_tensor(Velocity: np.ndarray, delS: np.ndarray, dt: np.ndarray):
     """
     Compute the velocity gradient tensor ∇v and its decomposition.
     
@@ -234,7 +234,7 @@ def compute_velocity_gradient_tensor(Velocity, delS, dt):
     return grad_v, strain_rate, vorticity, vorticity_vector
 
 
-def compute_curvature(T, delS, s):
+def compute_curvature(T: np.ndarray, delS: np.ndarray, s: np.ndarray):
     """
     Compute curvature κ = |dT/dS| along the shoreline.
     
@@ -274,7 +274,7 @@ def compute_curvature(T, delS, s):
     return kappa, dT_dS
 
 
-def compute_worldline_curvature(dQdS, tau):
+def compute_worldline_curvature(dQdS: np.ndarray, tau: np.ndarray):
     """
     Compute curvature of particle worldlines through space.
     
@@ -514,7 +514,12 @@ def compute_metric_eigvals(g):
     eigvecs = np.zeros((g.shape[0], g.shape[1], 2, 2))
     for i in range(g.shape[0]):
         for j in range(g.shape[1]):
-            vals, vecs = np.linalg.eig(g[i,j])
-            eigvals[i,j] = vals
-            eigvecs[i,j] = vecs
+            try:
+                vals, vecs = np.linalg.eig(g[i,j])
+                eigvals[i,j] = vals
+                eigvecs[i,j] = vecs
+            except np.linalg.LinAlgError:
+                # Handle the inf/NaN case - set to default values
+                eigvals[i,j] = [1.0, 1.0]  # or [np.nan, np.nan] depending on your needs
+                eigvecs[i,j] = np.eye(2)
     return eigvals, eigvecs
