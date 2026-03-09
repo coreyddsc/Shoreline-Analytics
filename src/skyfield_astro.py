@@ -167,6 +167,7 @@ def get_skyfield_positions(utc_time, latitude, longitude):
     
     # Compile results
     result = {
+        'timestamp': utc_time,
         # Moon Position data
         'moon_ra_icrf_deg': moon_ra.hours * 15,
         'moon_dec_icrf_deg': moon_dec.degrees,
