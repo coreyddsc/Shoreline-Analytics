@@ -31,7 +31,7 @@ Thumbs.db
 images/
 drawio/
 videos/
-webcoos/
+webcoos/parallel.py
 data/annotations/
 
 # Image files
