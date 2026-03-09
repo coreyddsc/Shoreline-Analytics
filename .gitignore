@@ -31,6 +31,8 @@ Thumbs.db
 images/
 drawio/
 videos/
+webcoos/
+data/annotations/
 
 # Image files
 *.jpg
