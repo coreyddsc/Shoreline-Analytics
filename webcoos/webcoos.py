@@ -173,47 +173,6 @@ def build_inventory(station: str = "oakisland_west", start: str = None, end: str
         
     return datetime_inventory
 
-def build_datetime_batches(datetime_inventory: dict, delta: timedelta | int):
-    """Build inventory datetime batches wrt top of the hour"""
-    if not datetime_inventory:
-        raise ValueError("Datetime inventory is empty. Please build the inventory first.")
-    if isinstance(delta, int):
-        delta = timedelta(minutes=delta)
-    print(f"Building datetime batches with delta: {delta}")
-
-    # Build batches
-    batches = []
-    current_batch = []
-    current_window_end = None
-    
-    for timestamp, url in datetime_inventory.items():
-        # Convert string timestamp to datetime object if needed
-        if isinstance(timestamp, str):
-            dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-        else:
-            dt = timestamp
-            
-        # Align to top of the hour for window calculation
-        window_start = dt.replace(minute=0, second=0, microsecond=0)
-        window_offset = (dt - window_start) // delta * delta
-        window_start += window_offset
-        window_end = window_start + delta
-        
-        # If we're in a new time window, start a new batch
-        if current_window_end is None or dt >= current_window_end:
-            if current_batch:  # Save previous batch if it exists
-                batches.append(current_batch)
-            current_batch = []
-            current_window_end = window_end
-        
-        current_batch.append((timestamp, url))
-    
-    # Don't forget the last batch
-    if current_batch:
-        batches.append(current_batch)
-    
-    return batches
-
 
 def get_video_metadata(url: str):
     """
@@ -307,204 +266,6 @@ def process_video(station: str, date: str, url: str, min_duration: float = 450, 
     except Exception as e:
         print(f"Error: {e}")
         return None
-    
-    
-# not set up to handle videos yet
-def get_webcoos_object(date: str, url: str):
-    """
-    Download image from URL and store as numpy array in memory.
-    
-    Args:
-        date_key: datetime string (will be used as the key)
-        url: URL string to download the image from
-    
-    Returns:
-        tuple: (date_key, numpy_array) or (None, None) if error
-    """
-    try:
-        # Download the image
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        
-        # Convert to numpy array using PIL
-        image = Image.open(io.BytesIO(response.content))
-        image_array = np.array(image)
-        # Use the provided date_key as the key
-        return date, image_array
-        
-    except requests.exceptions.RequestException as e:
-        print(f"Error downloading image from {url}: {e}")
-        return None, None
-    except Exception as e:
-        print(f"Error processing image from {url}: {e}")
-        return None, None
-        
-        
-def process_batch(batch):
-    """
-    Process a batch of images.
-    
-    Args:
-        batch: list of tuples (date_key, url)
-    
-    Returns:
-        list: list of tuples (date_key, numpy_array)
-    """
-    processed_images = []
-    for date_key, url in batch:
-        date, image_array = get_webcoos_object(date=date_key, url=url)
-        if image_array is not None:
-            processed_images.append((date, image_array))
-    
-    return processed_images
-    
-    
-def get_time_average(batch):
-    """
-    Compute the average image and weighted average timestamp for a batch.
-    
-    Args:
-        batch: list of tuples (timestamp, image_array)
-
-    Returns:
-        tuple: (average_timestamp, average_image_array)
-    """
-    if not batch:
-        return None, None
-    
-    # Extract timestamps and image arrays
-    timestamps = []
-    image_arrays = []
-    
-    
-    for timestamp, url in batch:
-        timestamp, image_array = get_webcoos_object(date=timestamp, url=url)
-
-        if image_array is not None and hasattr(image_array, 'size') and image_array.size > 0:
-            # Convert string timestamps to datetime objects for calculation
-            if isinstance(timestamp, str):
-                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-            else:
-                dt = timestamp
-            timestamps.append(dt)
-            image_arrays.append(image_array)
-    
-    if not image_arrays:
-        return None, None
-
-    # Calculate weighted average timestamp
-    total_seconds = sum(dt.timestamp() for dt in timestamps)
-    average_timestamp_seconds = total_seconds / len(timestamps)
-    average_timestamp = datetime.fromtimestamp(average_timestamp_seconds, tz=timestamps[0].tzinfo)
-
-    # Remove microseconds at the source
-    average_timestamp = average_timestamp.replace(microsecond=0)
-
-    # Convert back to string if original was string, otherwise keep as datetime
-    if isinstance(batch[0][0], str):
-        average_timestamp = average_timestamp.strftime("%Y-%m-%d %H:%M:%S")
-    
-    # Stack and average images
-    stacked_images = np.stack(image_arrays, axis=0)
-    average_image = np.mean(stacked_images, axis=0).astype(np.uint8)
-    
-    return average_timestamp, average_image
-
-
-
-def batch_processing_worker(batch, station):
-    """Worker function to process a single batch and save the time average image"""
-    try:
-        # Process the batch
-        time_avg, image_avg = get_time_average(batch)
-        
-        if image_avg is not None and hasattr(image_avg, 'size') and image_avg.size > 0:
-            # Handle datetime conversion for filename
-            if isinstance(time_avg, str):
-                time_avg_dt = datetime.strptime(time_avg, '%Y-%m-%d %H:%M:%S')
-            else:
-                time_avg_dt = time_avg  # It's already a datetime object
-            
-            # Format timestamp for filename
-            formatted_ts = time_avg_dt.strftime("%Y-%m-%d_%H%M")
-            filename = rf"{station}-{formatted_ts}.png"
-            filepath = CONST.image_dir / "10min_avg" / filename
-            os.makedirs(filepath, exist_ok=True)
-            
-            # Convert numpy array to PIL Image and save
-            pil_image = Image.fromarray(image_avg)
-            pil_image.save(filepath)
-            
-            # Convert back to string for the shoreline function
-            time_avg_str = time_avg_dt.strftime('%Y-%m-%d %H:%M:%S')
-            
-            # Use a try-except around the shoreline function
-            try:
-                tranSL, fig_tranSL = gts.getTimexShoreline(
-                    stationName=station, 
-                    imgName=image_avg, 
-                    imgPath=False, 
-                    imgDate=time_avg_str  # Pass as string
-                )
-                shoreline_points = len(tranSL) if tranSL else 0
-                return {"timestamp": time_avg_str, "shoreline_points": shoreline_points, "status": "success", "filename": filename}
-            except ValueError as e:
-                if "truth value" in str(e):
-                    # The function worked but has this internal warning
-                    return {"timestamp": time_avg_str, "shoreline_points": -1, "status": "success_with_warning", "filename": filename}
-                else:
-                    raise
-        
-        return {"timestamp": time_avg, "shoreline_points": 0, "status": "no_image", "filename": None}
-        
-    except Exception as e:
-        print(f"Batch failed with error: {e}")
-        import traceback
-        traceback.print_exc()  # This will show the full traceback
-        return {"timestamp": "unknown", "shoreline_points": 0, "status": "failed", "filename": None}
-    
-
-def average_image_batch_worker(batch, station):
-    """Worker function to download images without shoreline processing"""
-    try:
-        time_avg, image_avg = get_time_average(batch)
-        
-        if image_avg is not None and hasattr(image_avg, 'size') and image_avg.size > 0:
-            # Convert time_avg to datetime if it's a string
-            if isinstance(time_avg, str):
-                time_avg = datetime.strptime(time_avg, '%Y-%m-%d %H:%M:%S')
-            
-            # Convert numpy array to PIL Image and save
-            formatted_ts = time_avg.strftime("%Y-%m-%d_%H%M")
-            filename = rf"{station}-{formatted_ts}.png"
-            filepath = CONST.image_dir / "10min_avg" / filename
-            os.makedirs(filepath, exist_ok=True)
-            
-            # Convert numpy array to PIL Image
-            pil_image = Image.fromarray(image_avg)
-            pil_image.save(filepath)
-            
-            return {"timestamp": time_avg, "status": "saved", "filename": filename}
-        
-        return {"timestamp": time_avg, "status": "no_image", "filename": None}
-        
-    except Exception as e:
-        print(f"Batch failed with error: {e}")
-        return {"timestamp": "unknown", "status": "failed", "filename": None}
-    
-    
-# def parallel_processor(batches, station):
-#     results = []
-#     with ProcessPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
-#         future_to_batch = {executor.submit(average_image_batch_worker, (batch, station)): batch for batch in batches}
-        
-#         for future in as_completed(future_to_batch):
-#             try:
-#                 result = future.result()
-#                 results.append(result)
-#                 print(f"Completed batch: {result['timestamp']} with {result['shoreline_points']} shoreline points, saved as {result['filename']}")
-#             except Exception as e:
-#                 print(f"Batch failed with error: {e}")
 
 
 def process_video_worker(date, url, station, min_duration, target_samples):
@@ -518,7 +279,7 @@ def process_video_worker(date, url, station, min_duration, target_samples):
         'frame_count': result,  # or whatever your function returns
         'station': station
     }
-    
+
 
 def parallel_processor(inventory, station, min_duration, target_samples):
     results = []
@@ -556,19 +317,10 @@ def main(**kwargs):
     gtx_flag = kwargs.get("get_time_x")
     parallel_proc = kwargs.get("parallel_proc")
     
-    dtRng = set_date_range(start=start, end=end)
-    print(f"Datetime Range: {dtRng}")
-    inventory = build_inventory(station, dtRng[0], dtRng[1], product)
+    dt_rng = set_date_range(start=start, end=end)
+    inventory = build_inventory(station, dt_rng[0], dt_rng[1], product)
     inv_key_list = list(inventory.keys())
-    print(f"Inventory Keys:\n{inv_key_list[:5]}")
-    print(f"Inventory Length: {len(inv_key_list)}")
     
-    i = 0
-    for k, v in inventory.items():
-        if i < 3:
-            print(f"Inventory DATE: {k}")
-            print(f"Inventory URL:\n{v}")
-            i += 1
     
     if product == "video-archive" and not parallel_proc:
         i = 0
@@ -576,6 +328,8 @@ def main(**kwargs):
             duration, frames = get_video_metadata(url)
             print(f"Video Date: {date} | Duration: {duration} | Frame Count: {frames}")
             if i < 3:
+                print(f"Inventory DATE: {date}")
+                print(f"Inventory URL:\n{url}")
                 sample_count = process_video(station, date, url, min_duration, target_samples)
                 print(f"Sample count used for image: {sample_count} ")
                 if sample_count is not None:
