@@ -1,14 +1,12 @@
 from datetime import datetime, timedelta
 from pathlib import Path
-import PIL
 import requests
 import cv2
+from skimage.measure import shannon_entropy
 import numpy as np
 import pandas as pd
 import os
 import sys
-import math
-import io
 import time
 import json
 from PIL import Image
@@ -17,6 +15,7 @@ import multiprocessing
 import subprocess
 import pywebcoos
 import argparse
+from itertools import groupby
 
 try:
     import webcoos.getTimexShoreline as gts
@@ -257,19 +256,24 @@ def process_video(station: str, date: str, url: str, min_duration: float = 450, 
         # Elapsed time for processing
         elapsed = round(time.time() - start, 3)
 
-        process_stats = {
-            "image_name": rf"{file_path.stem}.png",
-            "date": formatted_date,
-            "video_duration": duration,
-            "video_frames": total_frames,
-            "n_samples": sample_count,
-            "processing_time": elapsed
-        }
-        
         # Create and save average image
         if sample_count > 0:
             average_image = (accumulated / sample_count).astype(np.uint8)
             cv2.imwrite(str(file_path), average_image)
+            
+            process_stats = {
+                "image_name": rf"{file_path.stem}.png",
+                "date": formatted_date,
+                "video_duration": duration,
+                "video_frames": total_frames,
+                "n_samples": sample_count,
+                "processing_time": elapsed
+                # "std_dev": float(cv2.meanStdDev(average_image)[1][0][0]),
+                # "sharpness": float(cv2.Laplacian(average_image, cv2.CV_64F).var()),
+                # "brightness": float(cv2.mean(average_image)[0]),
+                # "entropy": shannon_entropy(average_image)
+            }
+            
             return process_stats
         else:
             print("No frames sampled")
@@ -312,16 +316,42 @@ def parallel_processor(inventory: dict, station: str, min_duration: float, targe
     
     pstats_outf = CONST.cwd / "data" / station / "process_stats.jsonl"
     pstats_outf.parent.mkdir(parents=True, exist_ok=True)
-    with open(pstats_outf, "w") as f:
-        for result in results:
-            f.write(json.dumps(result) + '\n')
+    
+    
+    # read existing dates if file exists
+    existing_dates = set()
+    if pstats_outf.exists():
+        with open(pstats_outf, 'r') as f:
+            for line in f:
+                try:
+                    existing = json.loads(line)
+                    n_samples = existing.get('n_samples')
+                    if n_samples == target_samples:
+                        existing_dates.add(existing.get('date'))
+                    # also needs to handle target sample size
+                    
+                except json.JSONDecodeError:
+                    continue
+    
+    # append only new results not in the file
+    new_results = [r for r in results if r.get('date') not in existing_dates]
+    
+    if new_results:
+        with open(pstats_outf, "a") as f:
+            for result in new_results:
+                f.write(json.dumps(result) + '\n')
+        print(f"Added {len(new_results)} new entries to {pstats_outf.stem}")
+    else:
+        print("No new entries to add.")
     
     return results
 
 
-def filter_inventory(inventory: dict, station: str, target_samples: int):
+def filter_inventory(inventory: dict, station: str, target_samples: int, hourly: bool = False):
     "Filters the inventory query to exclude images already processed at a given target sample"
     img_dir = CONST.image_dir / station / "time_average" / rf"n={target_samples}-frames"
+    if not img_dir.exists():
+        return inventory
     img_list = os.listdir(img_dir)
     img_dates = [img.replace(f'{station}-', '').replace('.png', '') for img in img_list]
     
@@ -331,8 +361,36 @@ def filter_inventory(inventory: dict, station: str, target_samples: int):
         formatted_date = safe_date.split('T')[0] + "_" + safe_date.split('T')[1][:4]
         if formatted_date not in img_dates:
             filt_inv.setdefault(date, url)
-            
+        
+    # hourly_filter = {}    
+    if hourly:
+        pass
+    
     return filt_inv
+
+
+def sample_inventory(inventory: dict):
+    # Parse and keep original date string
+    parsed = []
+    for date, url in inventory.items():
+        formatted_date = date.split('T')[0] + " " + date.split('T')[1][:8]
+        dt_obj = datetime.fromisoformat(formatted_date)
+        parsed.append((dt_obj, date, url))
+    
+    # Sort by datetime
+    parsed.sort(key=lambda x: x[0])
+    
+    # Group by hour and take earliest
+    result = {}
+    for key, group in groupby(parsed, key=lambda x: (x[0].year, x[0].month, x[0].day, x[0].hour)):
+        earliest_dt, earliest_date, earliest_url = next(group)
+        result[earliest_date] = earliest_url
+    
+    inv_len = len(inventory)
+    result_len = len(result)
+    print(f"Reduced Inventory from {inv_len} to {result_len} hourly video entries")
+    
+    return result
 
 
 def main(**kwargs):
@@ -343,6 +401,7 @@ def main(**kwargs):
     product = kwargs.get("product")
     min_duration = kwargs.get("min_vid_duration")
     target_samples = kwargs.get("target_samples")
+    hourly = kwargs.get("hourly")
     gtx_flag = kwargs.get("get_time_x")
     parallel_proc = kwargs.get("parallel_proc")
     dry_run = kwargs.get("dry_run")
@@ -350,6 +409,9 @@ def main(**kwargs):
     
     dt_rng = set_date_range(start=start, end=end)
     inventory = build_inventory(station, dt_rng[0], dt_rng[1], product)
+    
+    if hourly:
+        inventory = sample_inventory(inventory)
     
     if not overwrite:
         inventory = filter_inventory(inventory, station, target_samples)
@@ -377,9 +439,10 @@ def cli():
     parser.add_argument("station", type=str, help="WebCOOS Station Name")
     parser.add_argument("start_time", type=str, help="Start dateimte formatted as YYYY-MM-DD HH:MM:SS")
     parser.add_argument("end_time", type=str, help="End datetime formatted as YYYY-MM-DD HH:MM:SS")
-    parser.add_argument('-p', "--product", type=str, help="WebCOOS Product Line", default="one-minute-stills")
+    parser.add_argument('-p', "--product", type=str, help="WebCOOS Product Line", default="video-archive")
     parser.add_argument('-mvd', "--min-vid-duration", type=float, help="Minimum required video duration", default=450.0)
     parser.add_argument('-t', '--target-samples', type=int, help="Number of sample frames to use in video to image processing", default=100)
+    parser.add_argument('-hr', '--hourly', action="store_true", help="Subsets processing inventory to a single video per hour")
     parser.add_argument('-gtx', "--get-time-x", action="store_true", help="Apply Static getTimexShoreline Extract Methods") # store default as false to not use static extract
     parser.add_argument('-ll', '--parallel-proc', action="store_true", help="Use Parallel Processing") # store default as true for parallel processing
     parser.add_argument('-dry-run', action="store_true", help="Dry run will not process videos to images")
@@ -391,3 +454,4 @@ def cli():
 if __name__ == "__main__":
     sys.exit(cli())
     # python webcoos/webcoos.py "jennette_south" "2025-07-10 06:00:00" "2025-07-17 06:00:00" -p "video-archive"
+    

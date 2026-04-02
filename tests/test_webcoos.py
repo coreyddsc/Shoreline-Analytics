@@ -59,55 +59,17 @@ class TestBuildInventory(BaseCaseTest):
 		for dt, url in dt_inv.items():
 			print(dt, url)
 	
-	
-class TestBuildDatetimeBatches(BaseCaseTest):
-	def test_build_datetime_batches(self):
-		dt_range = set_date_range(self.start, self.end)
-		dt_inv = build_inventory(self.station, dt_range[0], dt_range[1])
-		dt_batches = build_datetime_batches(dt_inv, delta=10)
-		print(f"First Datetime Batch:\n{dt_batches[0]}")
-	
 
-class TestGetWebcoosObject(BaseCaseTest):
-	def test_get_webcoos_object(self):
-		dt_range = set_date_range(self.start, self.end)
-		dt_inv = build_inventory(self.station, dt_range[0], dt_range[1])
-		dt_batches = build_datetime_batches(dt_inv, delta=10)
-		print(f"First Batch:\n{dt_batches[0][0]}")
-		date, url = dt_batches[0][0]
-		date_key, array = get_webcoos_object(date, url)
-		print(array)
-	
-	
-class TestProcessBatch(BaseCaseTest):
-	def test_process_batch(self):
-		dt_range = set_date_range(self.start, self.end)
-		dt_inv = build_inventory(self.station, dt_range[0], dt_range[1])
-		dt_batches = build_datetime_batches(dt_inv, delta=10)
-		processed_batches = process_batch(dt_batches[0])
-	
-
-class TestGetTimeAverage(BaseCaseTest):
-	def test_get_time_average(self):
-		dt_range = set_date_range(self.start, self.end)
-		dt_inv = build_inventory(self.station, dt_range[0], dt_range[1])
-		dt_batches = build_datetime_batches(dt_inv, delta=10)
-		avg_dt, avg_img = get_time_average(dt_batches[0])
-		print(f"Average Batch Datetime: {avg_dt}")
-		print(f"Batch Time Averaged Image: {avg_img}")
-		
-		
-class TestBatchProcessingWorker(BaseCaseTest):
-	def test_batch_processing_worker(self):
-		dt_range = set_date_range(self.start, self.end)
-		dt_inv = build_inventory(self.station, dt_range[0], dt_range[1])
-		dt_batches = build_datetime_batches(dt_inv, delta=10)
-		batch_processing_worker(dt_batches[0], self.station)
-		
-		
-class TestParallelProcessor(BaseCaseTest):
-	def test_parallel_processor(self):
-		dt_range = set_date_range(self.start, self.end)
-		dt_inv = build_inventory(self.station, dt_range[0], dt_range[1])
-		dt_batches = build_datetime_batches(dt_inv, delta=10)
-		parallel_processor(dt_batches, self.station)
+class TestFilterInventory(BaseCaseTest):
+    def test_filter_inventory(self):
+        pass
+    
+    
+class TestSampleInventory(BaseCaseTest):
+    def test_sample_inventory(self):
+        start, end = "2025-07-10 06:00:00", "2025-07-10 14:00:00"
+        dt_range = set_date_range(start, end)
+        dt_inv = build_inventory("jennette_south", dt_range[0], dt_range[1], product="video-archive")
+        sample_inv = sample_inventory(dt_inv)
+        for date, url in sample_inv.items():
+            print(date)
