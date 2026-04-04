@@ -43,22 +43,22 @@ class ShorelineSketch:
 
 	def setup_variables(self):
 		# Initialize Variables
-		cwd = os.getcwd()
+		cwd = Path(os.getcwd())
 		print(f"CWD: {cwd}")
 
 		# Station Configs Path Directory
-		station_config_path = Path(cwd) / "src" / rf"{self.station}.config.json"
+		station_config_path = cwd / "src" / rf"{self.station}.config.json"
 		print(f"Station Config Path: {station_config_path}")
 
 		# Stored Time Average Images Directories
-		images_dir = Path(rf"C:\Users\Corey Dearing\Desktop\CurrentProjects\shoreline\images")
-		self.timeavg_images_dir = images_dir / rf"{self.station}_roi" / "10min_avg"
+		images_dir = cwd / "images" 
+		self.timeavg_images_dir = images_dir / rf"{self.station}" / "time_average" / "n=100-frames"
 		self.time_avg_images = os.listdir(self.timeavg_images_dir)
 		self.dt_objects = convert_str_to_datetime(self.time_avg_images)
 		self.dt_strings = convert_str_to_datetime(self.dt_objects, reverse=True)
 
 		# Stored Annotations
-		self.annotations_file = Path(cwd) / "data" / "annotations" / rf"{self.station}_annotations.jsonl"
+		self.annotations_file = cwd / "data" / "annotations" / rf"{self.station}_annotations.jsonl"
 
 		
 
